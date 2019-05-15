@@ -20,6 +20,8 @@ import java.util.Vector;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.Semaphore;
+
 
 import com.mongodb.BasicDBObject;
 import com.mongodb.BulkWriteOperation;
@@ -27,6 +29,7 @@ import com.mongodb.BulkWriteResult;
 import com.mongodb.DBCollection;
 import com.mongodb.DBCursor;
 import com.mongodb.DBObject;
+import com.mongodb.BasicDBObject;
 import com.mongodb.MongoClient;
 import com.mongodb.MongoClientURI;
 import com.mongodb.MongoClientOptions;
@@ -64,6 +67,8 @@ public class MongoDbClient extends DB {
     private static com.mongodb.DB[] db;
 
     private static int serverCounter = 0;
+
+    private static Semaphore fullScanSemaphore = new Semaphore(1);
 
     /** The default write concern for the test. */
     private static WriteConcern writeConcern;
@@ -397,29 +402,28 @@ public class MongoDbClient extends DB {
     @Override
     public int scan(String table, String startkey, int recordcount,
             Set<String> fields, Vector<HashMap<String, ByteIterator>> result) {
-        try {
-            DBCollection collection = db[serverCounter++%db.length].getCollection(table);
-            DBObject q = new BasicDBObject().put("_id", new BasicDBObject("$ne", 2));
-            DBCursor queryResult = collection.find(query);
-
-
-            if (queryResult != null) {
-                while(cursor.hasNext()){
-                    cursor.next()
+        if(fullScanSemaphore.tryAcquire()) {
+            try {
+                DBCollection collection = db[serverCounter++ % db.length].getCollection(table);
+                BasicDBObject q = new BasicDBObject("_id", new BasicDBObject("$ne", 0));
+                DBCursor queryResult = collection.find(q);
+                if (queryResult != null) {
+                    while (queryResult.hasNext()) {
+                        queryResult.next();
+                    }
+                    queryResult.close();
+                    return 0;
                 }
+                System.err.println("No results returned for key " + startkey);
                 queryResult.close();
-                return 0;
+                return 1;
+            } finally {
+                fullScanSemaphore.release();
+                return 1;
             }
-            System.err.println("No results returned for key " + key);
-            queryResult.close();
-            return 1;
-        }
-        catch (Exception e) {
-            System.err.println(e.toString());
-            queryResult.close();
-            return 1;
-        }
 
+        }
+        return 1;
     }
 
     /**
