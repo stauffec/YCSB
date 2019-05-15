@@ -397,47 +397,27 @@ public class MongoDbClient extends DB {
     @Override
     public int scan(String table, String startkey, int recordcount,
             Set<String> fields, Vector<HashMap<String, ByteIterator>> result) {
-        DBCursor cursor = null;
         try {
             DBCollection collection = db[serverCounter++%db.length].getCollection(table);
-            DBObject fieldsToReturn = null;
-            // { "_id":{"$gte":startKey, "$lte":{"appId":key+"\uFFFF"}} }
-            DBObject scanRange = new BasicDBObject().append("$gte", startkey);
-            DBObject q = new BasicDBObject().append("_id", scanRange);
-            DBObject s = new BasicDBObject().append("_id",INCLUDE);
-            if (fields != null) {
-                fieldsToReturn = new BasicDBObject();
-                Iterator<String> iter = fields.iterator();
-                while (iter.hasNext()) {
-                    fieldsToReturn.put(iter.next(), INCLUDE);
+            DBObject q = new BasicDBObject().put("_id", new BasicDBObject("$ne", 2));
+            DBCursor queryResult = collection.find(query);
+
+
+            if (queryResult != null) {
+                while(cursor.hasNext()){
+                    cursor.next()
                 }
+                queryResult.close();
+                return 0;
             }
-            cursor = collection.find(q, fieldsToReturn).sort(s).limit(recordcount);
-            if (!cursor.hasNext()) {
-                System.err.println("Nothing found in scan for key " + startkey);
-                return 1;
-            }
-            while (cursor.hasNext()) {
-                // toMap() returns a Map, but result.add() expects a
-                // Map<String,String>. Hence, the suppress warnings.
-                HashMap<String, ByteIterator> resultMap = new HashMap<String, ByteIterator>();
-
-                DBObject obj = cursor.next();
-                fillMap(resultMap, obj);
-
-                result.add(resultMap);
-            }
-
-            return 0;
+            System.err.println("No results returned for key " + key);
+            queryResult.close();
+            return 1;
         }
         catch (Exception e) {
             System.err.println(e.toString());
+            queryResult.close();
             return 1;
-        }
-        finally {
-             if( cursor != null ) {
-                    cursor.close();
-             }
         }
 
     }
