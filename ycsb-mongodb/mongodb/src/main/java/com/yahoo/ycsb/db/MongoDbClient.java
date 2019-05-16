@@ -405,7 +405,7 @@ public class MongoDbClient extends DB {
         if(fullScanSemaphore.tryAcquire()) {
             try {
                 DBCollection collection = db[serverCounter++ % db.length].getCollection(table);
-                BasicDBObject q = new BasicDBObject("_id", new BasicDBObject("$ne", 0));
+                BasicDBObject q = new BasicDBObject("nofield", 99);
                 DBCursor queryResult = collection.find(q);
                 if (queryResult != null) {
                     while (queryResult.hasNext()) {
